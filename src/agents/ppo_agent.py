@@ -34,7 +34,6 @@ class PPOAgent:
     def __init__(self, environment, config_path: str = "configs/config.yaml", model_save_path: str = "models", log_dir: str = "logs"):
         """PPO Agent başlatma"""
         self.env = environment
-        self.config_path = config_path  # Save config path
         self.config = self._load_config(config_path)
         self.training_config = self.config['training']
         self.log_dir = log_dir
@@ -47,7 +46,6 @@ class PPOAgent:
         self.model: Optional[PPO] = None
         self.model_path = model_save_path
         self._ensure_model_directory()
-        self._save_config_to_model_dir() # Save config on init
         
         # Training state
         self.total_timesteps = 0
@@ -71,18 +69,6 @@ class PPOAgent:
         if not os.path.exists(self.model_path):
             os.makedirs(self.model_path)
             logger.info(f"📁 Model dizini oluşturuldu: {self.model_path}")
-    
-    def _save_config_to_model_dir(self):
-        """Modelin kullandığı config dosyasını model klasörüne kaydeder."""
-        try:
-            target_path = os.path.join(self.model_path, "config.yaml")
-            with open(self.config_path, 'r', encoding='utf-8') as src_file:
-                config_data = src_file.read()
-            with open(target_path, 'w', encoding='utf-8') as dest_file:
-                dest_file.write(config_data)
-            logger.info(f"💾 Yapılandırma dosyası model dizinine kaydedildi: {target_path}")
-        except Exception as e:
-            logger.warning(f"⚠️  Yapılandırma dosyası kopyalanamadı: {e}")
     
     def create_model(self, policy: str = "MlpPolicy", **kwargs) -> PPO:
         """PPO model oluştur"""
@@ -153,7 +139,7 @@ class PPOAgent:
             training_duration = (end_time - start_time).total_seconds()
             
             # Final model kaydet
-            final_model_path = os.path.join(self.model_path, f"ppo_final_{total_timesteps}.zip")
+            final_model_path = os.path.join(self.model_path, "model.zip")
             self.save_model(final_model_path)
             
             # Eğitim sonuçları
