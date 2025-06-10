@@ -38,15 +38,10 @@ class EnergyEnvironment(gym.Env):
     def __init__(self, data_handler=None, config_path: str = "configs/config.yaml", config: Optional[Dict] = None):
         """
         Environment başlatma
-        
-        Args:
-            data_handler: DataHandler instance (opsiyonel)
-            config_path: Konfigürasyon dosyası yolu (eğer config sözlüğü verilmezse kullanılır)
-            config: Hazır konfigürasyon sözlüğü (opsiyonel, testler için)
         """
         super().__init__()
         
-                # Konfigürasyon yükle
+        # Konfigürasyon yükle
         if config:
             self.config = config
         else:
@@ -61,7 +56,6 @@ class EnergyEnvironment(gym.Env):
         self.max_soc = self.battery_config.get('max_soc', 0.9)
         self.max_battery_power = self.battery_config.get('max_power_kw', 5000)
         self.battery_efficiency = self.battery_config.get('efficiency', 0.92)
-        # Batarya başlangıç SOC'sini tek yerden al ve iki yerde de aynı değeri kullan
         self.initial_soc = self.battery_config.get('initial_soc', 0.8)
         self.battery_soc = self.initial_soc
         
@@ -95,14 +89,6 @@ class EnergyEnvironment(gym.Env):
             'renewable_usage_kwh': 0.0,
             'grid_usage_kwh': 0.0,
             'battery_cycles': 0.0
-        }
-        
-        # Grid düzeltme takibi
-        self.grid_adjustments = {
-            'violations': 0,
-            'increase_count': 0,
-            'zero_count': 0,
-            'last_log_step': -1000
         }
         
         logger.info("🏗️ EnergyEnvironment başlatıldı")
@@ -147,8 +133,6 @@ class EnergyEnvironment(gym.Env):
         )
         
         # Action Space (Normalized Continuous)
-        # Action 1: Grid connection tendency (-1: Off, 1: On)
-        # Action 2: Battery power tendency (-1: Full Discharge, 1: Full Charge)
         action_low = np.array([-1.0, -1.0], dtype=np.float32)
         action_high = np.array([1.0, 1.0], dtype=np.float32)
         
@@ -186,14 +170,6 @@ class EnergyEnvironment(gym.Env):
                 'battery_cycles': 0.0
             }
             
-            # Grid adjustment tracking sıfırla
-            self.grid_adjustments = {
-                'violations': 0,
-                'increase_count': 0,
-                'zero_count': 0,
-                'last_log_step': -1000
-            }
-            
             # İlk observation
             observation = self._get_observation()
             info = self._get_info()
@@ -208,12 +184,6 @@ class EnergyEnvironment(gym.Env):
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         """
         Environment'ta bir adım al
-        
-        Args:
-            action: Normalized continuous action [grid_tendency, battery_tendency]
-            
-        Returns:
-            observation, reward, terminated, truncated, info
         """
         terminated = False
         truncated = False
@@ -221,29 +191,24 @@ class EnergyEnvironment(gym.Env):
         if self.current_step >= len(self.episode_data) - 1:
             truncated = True
             
-            # Mevcut veriyi al
-            current_data = self.episode_data.iloc[self.current_step]
+        # Mevcut veriyi al
+        current_data = self.episode_data.iloc[self.current_step]
         load_kw = float(current_data['load_kw'])
         solar_kw = float(current_data['solar_power_kW'])
         wind_kw = float(current_data['wind_power_kW'])
-            renewable_kw = solar_kw + wind_kw
-            
-        # --- 1. Aksiyonları Yorumla ---
-        # Grid bağlantı kararını belirle (continuous -> discrete)
-        grid_connection_decision = 1 if action[0] > 0 else 0
+        renewable_kw = solar_kw + wind_kw
         
-        # Batarya gücünü belirle (continuous -> scaled)
+        # --- 1. Aksiyonları Yorumla ---
+        grid_connection_decision = 1 if action[0] > 0 else 0
         battery_power = float(action[1]) * self.max_battery_power
 
         # --- 2. Güvenlik ve Fizik Kurallarını Uygula ---
-        # Kritik durum kontrolü: SOC düşük ve yenilenebilir yetersizse şebekeye bağlanmayı zorunlu kıl
         is_critical_state = (self.battery_soc <= self.min_soc) and (renewable_kw < load_kw)
         if is_critical_state:
-            grid_connection = 1  # Ajanın kararını geçersiz kıl
+            grid_connection = 1
         else:
             grid_connection = grid_connection_decision
 
-        # Batarya gücünü fiziksel limitlere göre ayarla (şarj/deşarj için SOC kontrolü)
         battery_power = self._validate_battery_power(battery_power)
 
         # --- 3. Enerji Dengesini Hesapla ---
@@ -251,31 +216,27 @@ class EnergyEnvironment(gym.Env):
         unmet_load = 0.0
 
         if grid_connection == 1:
-            # Şebeke bağlı: Gerekli enerjiyi hesapla. Pozitif ise şebekeden çek, negatif ise 0 yap (şebekeye satış yok)
             required_grid_power = load_kw + battery_power - renewable_kw
             grid_energy = max(0, required_grid_power)
             
-            # Şebeke gücü limiti kontrolü
             if grid_energy > self.max_grid_power:
                 unmet_load = grid_energy - self.max_grid_power
                 grid_energy = self.max_grid_power
-                else:
-            # Şebeke bağlı değil: Yenilenebilir ve batarya ile yükü karşılamaya çalış
+        else:
             balance = renewable_kw - battery_power - load_kw
             if balance < 0:
-                unmet_load = abs(balance) # Karşılanamayan yük miktarı
+                unmet_load = abs(balance)
 
-        # --- 5. Ödülü Hesapla ---
+        # --- 4. Ödülü Hesapla ---
         reward, reward_details = self._calculate_reward(load_kw, renewable_kw, grid_energy, battery_power, unmet_load, grid_connection, current_data)
         
-        # --- 4. Durumları Güncelle (ÖDÜLDEN SONRA, GÖZLEMDEN ÖNCE) ---
+        # --- 5. Durumları Güncelle ---
         self._update_battery(battery_power)
         
         # --- 6. Sonraki Adıma Geç ---
-            self.current_step += 1
+        self.current_step += 1
         observation = self._get_observation()
         
-        # Info'ya testler ve görselleştirme için detaylı bilgi ekleyelim
         info = {
             'step_details': {
                 'load': load_kw,
@@ -289,8 +250,8 @@ class EnergyEnvironment(gym.Env):
         }
         
         self._update_metrics(reward, grid_energy, renewable_kw, battery_power, unmet_load)
-            
-            return observation, reward, terminated, truncated, info
+        
+        return observation, reward, terminated, truncated, info
     
     def _get_observation(self) -> np.ndarray:
         """Mevcut state observation'ını döndür"""
@@ -315,33 +276,28 @@ class EnergyEnvironment(gym.Env):
     
     def _calculate_reward(self, load_kw: float, renewable_kw: float, grid_energy: float, 
                          battery_power: float, unmet_load: float, grid_connection: int, current_data: pd.Series) -> Tuple[float, Dict]:
-        """(YENİ DÜZELTME) Ajanın öğrenme kısırdöngüsünü kıran, bütünsel ödül fonksiyonu"""
+        """Ödül fonksiyonu"""
         
         rewards = {}
 
-        # --- ÖNCELİK 1: Karşılanamayan Yük (KRİTİK HATA) ---
-        # Bu durum varsa, başka hiçbir şeye bakılmaz ve ağır ceza verilir.
+        # Karşılanamayan Yük
         if unmet_load > 0:
             rewards['unmet_load'] = unmet_load * self.unmet_load_penalty
-            # Karşılanamayan yük en büyük hata olduğu için burada çıkmak mantıklı.
             return sum(rewards.values()), rewards
 
-        # --- ÖNCELİK 2: Diğer Tüm Stratejik ve Operasyonel Cezalar ---
-        # Bu cezalar birikir ve ajana daha zengin bir geri bildirim sağlar.
-
-        # a) SOC İhlali (Artık fonksiyondan çıkmıyor)
+        # SOC İhlali
         if self.battery_soc < self.min_soc:
             soc_penalty = (self.min_soc - self.battery_soc) * self.soc_penalty_coef
-            if battery_power > 0: # Düzeltme aksiyonu (şarj) varsa cezayı azalt
+            if battery_power > 0:
                 soc_penalty *= 0.5
             rewards['soc_violation'] = soc_penalty
         elif self.battery_soc > self.max_soc:
             soc_penalty = (self.battery_soc - self.max_soc) * self.soc_penalty_coef
-            if battery_power < 0: # Düzeltme aksiyonu (deşarj) varsa cezayı azalt
+            if battery_power < 0:
                 soc_penalty *= 0.5
             rewards['soc_violation'] = soc_penalty
 
-        # b) Gereksiz Şebeke Kullanımı
+        # Gereksiz Şebeke Kullanımı
         can_operate_off_grid = (renewable_kw >= load_kw) or \
                                (self.battery_soc > self.min_soc and (renewable_kw + ((self.battery_soc - self.min_soc) * self.battery_capacity)) >= load_kw)
         
@@ -350,25 +306,24 @@ class EnergyEnvironment(gym.Env):
             penalty_coef = self.price_penalty_coef.get(price_level, -1.0)
             rewards['unnecessary_grid'] = penalty_coef * grid_energy
 
-        # c) Yenilenebilir Enerji İsrafı
-                excess_renewable = renewable_kw - load_kw
-        if excess_renewable > 0 and self.battery_soc < self.max_soc and (battery_power <= 0 or battery_power == 0): # Eğer şarj etmiyorsan
-             wasted_power = excess_renewable
-             rewards['renewable_waste'] = wasted_power * self.unused_penalty_coef
+        # Yenilenebilir Enerji İsrafı
+        excess_renewable = renewable_kw - load_kw
+        if excess_renewable > 0 and self.battery_soc < self.max_soc and battery_power <= 0:
+            wasted_power = excess_renewable
+            rewards['renewable_waste'] = wasted_power * self.unused_penalty_coef
 
-        # d) Ucuz Şarj Fırsatını Kaçırma
+        # Ucuz Şarj Fırsatını Kaçırma
         price_level = current_data.get('price_category', 'medium').lower()
         if self.battery_soc < self.max_soc and (price_level == 'low' or price_level == 'medium') and battery_power <= 0:
             soc_diff = self.max_soc - self.battery_soc
             rewards['missed_cheap_charge'] = soc_diff * self.cheap_energy_missed_penalty_coef
             
-        # e) Şebeke kullanımının genel maliyeti (gereksiz olmasa bile)
+        # Şebeke kullanımının genel maliyeti
         if grid_energy > 0:
             price_level = current_data.get('price_category', 'medium').lower()
-            price_coef = self.price_penalty_coef.get(price_level, -1.0) # Fiyat katsayıları zaten negatif
+            price_coef = self.price_penalty_coef.get(price_level, -1.0)
             rewards['grid_cost'] = grid_energy * price_coef
             
-        # Tüm hesaplanan ödül/ceza bileşenlerini topla
         return sum(rewards.values()), rewards
     
     def _update_metrics(self, reward: float, grid_energy: float, renewable_kw: float, battery_power: float, unmet_load: float):
@@ -379,14 +334,11 @@ class EnergyEnvironment(gym.Env):
         if not (self.min_soc <= self.battery_soc <= self.max_soc):
             self.episode_metrics['soc_violations'] += 1
         
-        # Batarya döngüsünü yaklaşık olarak hesapla (deşarj miktarına göre)
         if battery_power < 0:
-        self.episode_metrics['battery_cycles'] += abs(battery_power) / (2 * self.battery_capacity)
+            self.episode_metrics['battery_cycles'] += abs(battery_power) / (2 * self.battery_capacity)
     
     def _get_info(self, **kwargs) -> Dict:
-        """Get information about the current step. (Artık doğrudan step içinde oluşturuluyor)"""
-        # Bu fonksiyonun içeriği step metoduna taşındı.
-        # Gelecekteki kullanımlar için temel yapıyı koruyalım.
+        """Get information about the current step"""
         info = {}
         info.update(kwargs)
         return info
@@ -411,41 +363,29 @@ class EnergyEnvironment(gym.Env):
         logger.info("🔒 Environment kapatıldı")
     
     def _validate_battery_power(self, battery_power: float) -> float:
-        """Batarya gücünü SOC durumuna göre doğrular ve ayarlar."""
-        # Deşarj durumu
+        """Batarya gücünü SOC durumuna göre doğrular ve ayarlar"""
         if battery_power < 0:
-            # SOC minimumun altındaysa veya eşitse deşarja izin verme
             if self.battery_soc <= self.min_soc:
                 return 0.0
-            # İzin verilen maksimum deşarj miktarını hesapla (verimliliği de katarak)
             max_discharge_kwh = (self.battery_soc - self.min_soc) * self.battery_capacity
-            max_discharge_power = max_discharge_kwh / self.battery_efficiency # Deşarjda verimlilik paydaya gelir
-            # İstenen deşarj, izin verilenin üzerindeyse limiti uygula
+            max_discharge_power = max_discharge_kwh / self.battery_efficiency
             return max(battery_power, -min(self.max_battery_power, max_discharge_power))
-        # Şarj durumu
         elif battery_power > 0:
-            # SOC maksimumun üzerindeyse şarja izin verme
             if self.battery_soc >= self.max_soc:
                 return 0.0
-            # İzin verilen maksimum şarj miktarını hesapla
             max_charge_kwh = (self.max_soc - self.battery_soc) * self.battery_capacity
-            max_charge_power = max_charge_kwh * self.battery_efficiency # şarj verimi
-            # İstenen şarj, izin verilenin üzerindeyse limiti uygula
+            max_charge_power = max_charge_kwh * self.battery_efficiency
             return min(battery_power, min(self.max_battery_power, max_charge_power))
-        # Batarya power = 0 (idle)
         return 0.0
 
     def _update_battery(self, battery_power: float, time_step_hours: float = 1.0):
-        """Batarya SOC'sini güncelle."""
-        
-        # Batarya gücü verimlilikle ayarlanır
+        """Batarya SOC'sini güncelle"""
         if battery_power > 0:  # Şarj
             soc_change = (battery_power * time_step_hours * self.battery_efficiency) / self.battery_capacity
         elif battery_power < 0:  # Deşarj
             soc_change = (battery_power * time_step_hours) / self.battery_efficiency / self.battery_capacity
-            else:
+        else:
             soc_change = 0.0
             
         self.battery_soc += soc_change
-        # SOC'yi [0, 1] aralığında tut (nadiren de olsa limit aşımı olabilir)
         self.battery_soc = np.clip(self.battery_soc, 0.0, 1.0) 
