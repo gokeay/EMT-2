@@ -1,0 +1,37 @@
+🔍 EMT RL PROJECT - 1000 HOUR DETAILED SIMULATION SUMMARY
+================================================================================
+📅 Simulation Date: 2025-06-10 12:26:27
+🤖 Model: ppo_final_3504000.zip
+⏰ Duration: 1000 hours (1000 steps)
+
+📊 OVERALL STATISTICS
+--------------------------------------------------
+Total Energy Consumption: 1,844,586 kWh
+Total Solar Generation: 440,922 kWh
+Total Wind Generation: 1,300,059 kWh
+Total Renewable: 1,740,981 kWh
+Total Grid Usage: 1,000 kWh
+Average SOC: 0.1%
+SOC Range: 0.0% - 80.0%
+Total Reward: -16,230,676
+Average Renewable Coverage: 79.5%
+
+⚡ ENERGY EFFICIENCY METRICS
+--------------------------------------------------
+Renewable Efficiency: 94.4%
+Grid Dependency: 0.1%
+Battery Utilization: 0.1%
+
+💰 PRICE PERIOD DISTRIBUTION
+--------------------------------------------------
+low Price Hours: 418
+medium Price Hours: 418
+high Price Hours: 164
+
+🔋 BATTERY BEHAVIOR
+--------------------------------------------------
+Charging Hours: 0
+Discharging Hours: 1000
+Idle Hours: 0
+Net Battery Change: -80.00%
+
