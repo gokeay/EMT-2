@@ -274,56 +274,73 @@ class EnergyEnvironment(gym.Env):
             price_high
         ], dtype=np.float32)
     
-    def _calculate_reward(self, load_kw: float, renewable_kw: float, grid_energy: float, 
-                         battery_power: float, unmet_load: float, grid_connection: int, current_data: pd.Series) -> Tuple[float, Dict]:
-        """Ödül fonksiyonu"""
-        
+    def _calculate_reward(self, load_kw: float, renewable_kw: float, grid_energy: float,
+                        battery_power: float, unmet_load: float, grid_connection: int, current_data: pd.Series) -> Tuple[float, Dict]:
+        """
+        💡 YENİ MANTIK: Çelişkili cezalar yerine net maliyet optimizasyonu.
+        Ajanın tek hedefi var: Toplam ödülü (yani negatif maliyeti) maksimize etmek.
+        """
         rewards = {}
+        price_level = current_data.get('price_category', 'medium').lower()
+        price_value = current_data.get('price', 0.2) # Gerçek fiyat değerini alalım
 
-        # Karşılanamayan Yük
+        # --- 1. KRİTİK HATA: Karşılanamayan Yük ---
+        # Bu en büyük hatadır ve diğer her şeyi geçersiz kılar.
         if unmet_load > 0:
-            rewards['unmet_load'] = unmet_load * self.unmet_load_penalty
+            rewards['unmet_load_penalty'] = unmet_load * self.unmet_load_penalty
             return sum(rewards.values()), rewards
 
-        # SOC İhlali
-        if self.battery_soc < self.min_soc:
-            soc_penalty = (self.min_soc - self.battery_soc) * self.soc_penalty_coef
-            if battery_power > 0:
-                soc_penalty *= 0.5
-            rewards['soc_violation'] = soc_penalty
-        elif self.battery_soc > self.max_soc:
-            soc_penalty = (self.battery_soc - self.max_soc) * self.soc_penalty_coef
-            if battery_power < 0:
-                soc_penalty *= 0.5
-            rewards['soc_violation'] = soc_penalty
+        # --- 2. MALİYET HESAPLAMALARI ---
 
-        # Gereksiz Şebeke Kullanımı
-        can_operate_off_grid = (renewable_kw >= load_kw) or \
-                               (self.battery_soc > self.min_soc and (renewable_kw + ((self.battery_soc - self.min_soc) * self.battery_capacity)) >= load_kw)
-        
-        if grid_connection == 1 and can_operate_off_grid and grid_energy > 0:
-            price_level = current_data.get('price_category', 'medium').lower()
-            penalty_coef = self.price_penalty_coef.get(price_level, -1.0)
-            rewards['unnecessary_grid'] = penalty_coef * grid_energy
+        # a) Şebeke Enerji Maliyeti: Bu, en doğal cezadır.
+        # Kullandığın kadar ödersin. Fiyat katsayılarına gerek yok, gerçek fiyatı kullanalım.
+        # config'deki price_penalty_coef'i -1 gibi bir değerle çarpım faktörü yapabiliriz.
+        grid_cost_multiplier = -1.5 # Şebeke maliyetini daha belirgin yapmak için
+        rewards['grid_cost'] = grid_energy * price_value * grid_cost_multiplier
 
-        # Yenilenebilir Enerji İsrafı
+        # b) Batarya Yıpranma Maliyeti (Degradation Cost):
+        # Ajanın bataryayı gereksiz yere kullanmasını engeller. Her kullanımın küçük bir maliyeti olmalı.
+        # Bu katsayıyı config'e ekleyebilirsiniz: battery_degradation_penalty: -0.1
+        if battery_power != 0:
+            rewards['battery_degradation_cost'] = abs(battery_power) * self.config['reward'].get('battery_degradation_penalty', -0.1)
+
+        # --- 3. STRATEJİK FIRSATLAR (ÖDÜLLER VE BÜYÜK CEZALAR) ---
+
         excess_renewable = renewable_kw - load_kw
-        if excess_renewable > 0 and self.battery_soc < self.max_soc and battery_power <= 0:
-            wasted_power = excess_renewable
-            rewards['renewable_waste'] = wasted_power * self.unused_penalty_coef
 
-        # Ucuz Şarj Fırsatını Kaçırma
-        price_level = current_data.get('price_category', 'medium').lower()
-        if self.battery_soc < self.max_soc and (price_level == 'low' or price_level == 'medium') and battery_power <= 0:
-            soc_diff = self.max_soc - self.battery_soc
-            rewards['missed_cheap_charge'] = soc_diff * self.cheap_energy_missed_penalty_coef
+        # a) DURUM: Yenilenebilir Enerji Yükten Fazla
+        if excess_renewable > 0:
+            if grid_connection == 1 and grid_energy > 1: # 1kW gibi bir tolerans bırakalım
+                # ❌ KESİN HATA: Bedava enerji varken şebekeyi KULLANMA! Çok büyük ceza.
+                rewards['critical_grid_use_penalty'] = grid_energy * self.config['reward'].get('critical_grid_penalty', -100)
             
-        # Şebeke kullanımının genel maliyeti
-        if grid_energy > 0:
-            price_level = current_data.get('price_category', 'medium').lower()
-            price_coef = self.price_penalty_coef.get(price_level, -1.0)
-            rewards['grid_cost'] = grid_energy * price_coef
-            
+            if battery_power > 0: # 💡 DOĞRU DAVRANIŞ: Fazla enerjiyle şarj et.
+                # Ödülü, şarj ettiği miktarla orantılı yapalım
+                rewards['renewable_charge_reward'] = min(battery_power, excess_renewable) * self.config['reward'].get('renewable_charge_reward_coef', 1.0)
+            elif self.battery_soc < self.max_soc:
+                # ❌ KESİN HATA: Batarya doluyken bedava enerjiyi boşa harcama!
+                rewards['renewable_waste_penalty'] = excess_renewable * self.unused_penalty_coef
+
+        # b) DURUM: Düşük Fiyat Fırsatı
+        if price_level == 'low' and self.battery_soc < self.max_soc:
+            if battery_power > 0 and grid_energy > 0: # 💡 DOĞRU DAVRANIŞ: Ucuzken şebekeden şarj et.
+                rewards['cheap_charge_reward'] = battery_power * self.config['reward'].get('cheap_charge_reward_coef', 2.0)
+            elif battery_power <= 0:
+                # ❌ YANLIŞ DAVRANIŞ: Ucuz şarj fırsatını kaçırma.
+                soc_diff = self.max_soc - self.battery_soc
+                rewards['missed_cheap_charge_penalty'] = soc_diff * self.cheap_energy_missed_penalty_coef
+                
+        # c) SOC Sınırları
+        if self.battery_soc < self.min_soc:
+            rewards['soc_violation_penalty'] = (self.min_soc - self.battery_soc) * self.soc_penalty_coef
+        elif self.battery_soc > self.max_soc:
+            rewards['soc_violation_penalty'] = (self.battery_soc - self.max_soc) * self.soc_penalty_coef
+
+
+        # Eğer hiçbir ödül/ceza yoksa, küçük bir "hayatta kalma" ödülü verilebilir.
+        if not rewards:
+            rewards['time_step_reward'] = 0.1
+
         return sum(rewards.values()), rewards
     
     def _update_metrics(self, reward: float, grid_energy: float, renewable_kw: float, battery_power: float, unmet_load: float):

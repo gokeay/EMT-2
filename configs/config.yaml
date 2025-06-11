@@ -31,23 +31,29 @@ prices:
 # 🤖 Reward Parameters
 reward:
   # Temel cezalar
-  unmet_load_penalty: -1000.0       # Karşılanamayan yük için kW başına ceza (EN KRİTİK)
-  soc_penalty_coef: -2000.0          # SOC limit aşımında, aşılan % başına ceza
+  unmet_load_penalty: -2000.0       # Karşılanamayan yük için kW başına ceza (EN KRİTİK)
+  soc_penalty_coef: -3000.0          # SOC limit aşımında, aşılan % başına ceza
   
   # Stratejik cezalar
-  price_penalty_coef:               # Gereksiz şebeke kullanımı için fiyat seviyesine göre ceza katsayıları
-    low: -0.01
-    medium: -0.05
-    high: -0.1
+  #price_penalty_coef:               # Gereksiz şebeke kullanımı için fiyat seviyesine göre ceza katsayıları
+  #  low: -0.1
+  #  medium: -0.5
+  #  high: -1.0
   
-  unused_penalty_coef: -50         # İsraf edilen yenilenebilir enerji için kW başına ceza
+  unused_penalty_coef: -10.0    # Yenilenebilir israfının kW başına maliyeti. (Daha önce çok yüksekti, şimdi daha mantıklı)
+  cheap_energy_missed_penalty_coef: -50.0 # Ucuz şarjı kaçırma cezası.
   
-  cheap_energy_missed_penalty_coef: -50.0 # Ucuz şarj fırsatı kaçırma cezası (SOC farkı * katsayı)
+  battery_degradation_penalty: -0.1 # Bataryayı her kullanmanın kW başına küçük maliyeti.
+  critical_grid_penalty: -100.0     # Bedava enerji varken şebeke kullanmanın AĞIR cezası.
+
+  renewable_charge_reward_coef: 1.0   # Fazla yenilenebilir ile şarj etmenin kW başına ödülü.
+  cheap_charge_reward_coef: 2.0       # Ucuzken şarj etmenin kW başına ödülü (daha değerli).
+
 
 # 🤖 Training Parameters
 training:
   # Model parameters
-  learning_rate: 0.001
+  learning_rate: 0.01
   batch_size: 128
   gamma: 0.99
   
@@ -57,8 +63,8 @@ training:
   
   # Exploration parameters
   exploration:
-    entropy_coef: 0.05
-    exploration_fraction: 0.3
+    entropy_coef: 0.1
+    exploration_fraction: 0.5
     
   # Episode parameters
   episodes: 100
@@ -72,6 +78,6 @@ monitoring:
 
 # 📁 Data Paths
 data:
-  load_file: "data/synthetic_load_itu.csv"
-  wind_file: "data/sim_wind_gen_result.csv" 
-  solar_file: "data/sim_solar_gen_result.csv" 
+  load_file: "/content/EMT-2/data/synthetic_load_itu.csv"
+  wind_file: "/content/EMT-2/data/sim_wind_gen_result.csv" 
+  solar_file: "/content/EMT-2/data/sim_solar_gen_result.csv" 

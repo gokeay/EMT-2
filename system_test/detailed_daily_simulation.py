@@ -45,9 +45,9 @@ class RealDataHandler:
             logger.info("📂 Gerçek CSV dosyaları yükleniyor...")
             
             # CSV dosya yolları
-            load_file = os.path.join(self.data_dir, "synthetic_load_itu.csv")
-            solar_file = os.path.join(self.data_dir, "sim_solar_gen_result.csv")
-            wind_file = os.path.join(self.data_dir, "sim_wind_gen_result.csv")
+            load_file = os.path.join(self.data_dir, "/content/EMT-2/data/synthetic_load_itu.csv")
+            solar_file = os.path.join(self.data_dir, "/content/EMT-2/data/sim_solar_gen_result.csv")
+            wind_file = os.path.join(self.data_dir, "/content/EMT-2/data/sim_wind_gen_result.csv")
             
             # Dosya varlık kontrolü
             for file_path in [load_file, solar_file, wind_file]:
@@ -616,7 +616,7 @@ def main():
     
     # Model path kontrolü
     model_paths = [
-        "results/models/PPO_v2_400ep_final/ppo_final_3504000.zip"
+        "/content/models/PPO_0004_400k_20250611_1212/model.zip"
     ]
     
     selected_model = None

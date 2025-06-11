@@ -39,11 +39,11 @@ def parse_arguments():
     
     parser.add_argument('--timesteps', type=int, default=(100000),
                        help='Total training timesteps (default: 100000)')
-    parser.add_argument('--config', type=str, default='configs/config.yaml',
-                       help='Config file path (default: configs/config.yaml)')
+    parser.add_argument('--config', type=str, default='/content/EMT-2/configs/config.yaml',
+                       help='Config file path (default: /content/EMT-2/configs/config.yaml)')
     parser.add_argument('--no-monitoring', action='store_true',
                        help='Disable live monitoring')
-    parser.add_argument('--eval-episodes', type=int, default=10,
+    parser.add_argument('--eval-episodes', type=int, default=5,
                        help='Evaluation episodes (default: 10)')
     parser.add_argument('--model-name', type=str, default='',
                         help='Custom model name (otomatik ID sistemi kullanılır eğer boşsa)')

@@ -6,7 +6,7 @@ Model isimlendirmesi için otomatik ID sistemi
 import os
 import json
 from datetime import datetime
-from typing import str
+#from typing import str
 import logging
 
 logger = logging.getLogger(__name__)

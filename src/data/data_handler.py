@@ -67,10 +67,9 @@ class DataHandler:
         """
         try:
             # Dosya yollarını kontrol et
-            load_file = getattr(self, 'load_file', 'synthetic_load_itu.csv')
-            solar_file = getattr(self, 'solar_file', 'sim_solar_gen_result.csv')
-            wind_file = getattr(self, 'wind_file', 'sim_wind_gen_result.csv')
-            
+            load_file = getattr(self, 'load_file', '/content/EMT-2/data/synthetic_load_itu.csv')
+            solar_file = getattr(self, 'solar_file', '/content/EMT-2/data/sim_solar_gen_result.csv')
+            wind_file = getattr(self, 'wind_file', '/content/EMT-2/data/sim_wind_gen_result.csv')
             # Verileri yükle
             load_data = self.load_energy_data(load_file)
             solar_data = self.load_energy_data(solar_file)
