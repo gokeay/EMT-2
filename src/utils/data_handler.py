@@ -20,7 +20,7 @@ class DataHandler:
     CSV verilerini yükler ve RL environment için hazırlar
     """
     
-    def __init__(self, config_path: str = "configs/config.yaml"):
+    def __init__(self, config_path: str = "/content/EMT-2/configs/config.yaml"):
         """
         Data Handler başlatma
         

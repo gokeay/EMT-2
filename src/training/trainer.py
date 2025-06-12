@@ -33,7 +33,7 @@ class TrainingManager:
     PPO Agent eğitimi ve monitoring yönetimi
     """
     
-    def __init__(self, config_path: str = "configs/config.yaml"):
+    def __init__(self, config_path: str = "/content/EMT-2/configs/config.yaml"):
         """Training Manager başlatma"""
         self.config_path = config_path
         self.training_start_time = None

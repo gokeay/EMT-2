@@ -24,7 +24,7 @@ from src.training.trainer import TrainingManager
 from src.monitoring.live_monitor import LiveMonitor
 from src.agents.ppo_agent import PPOAgent
 from src.environment.energy_environment import EnergyEnvironment
-from src.data.data_handler import DataHandler
+#from src.data.data_handler import DataHandler
 from src.utils.cuda_utils import cuda_manager
 
 # Logging
@@ -38,7 +38,7 @@ class ModelEvaluator:
     Kapsamlı model değerlendirme ve analiz sınıfı
     """
     
-    def __init__(self, model_path: str, config_path: str = "configs/config.yaml"):
+    def __init__(self, model_path: str, config_path: str = "/content/EMT-2/configs/config.yaml"):
         """
         Initialize Model Evaluator
         

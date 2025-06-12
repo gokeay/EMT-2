@@ -325,6 +325,17 @@ class EnergyEnvironment(gym.Env):
             elif battery_power <= 0:
                 soc_diff = self.max_soc - self.battery_soc
                 rewards['missed_cheap_charge_penalty'] = soc_diff * self.cheap_energy_missed_penalty_coef
+        
+           # ❗️❗️❗️ YENİ EKLENEN "TEMBELLİK CEZASI" ❗️❗️❗️
+           
+        # c) DURUM: Yüksek Fiyat Fırsatını Kaçırma (Peak Shaving)
+        if price_level == 'high' and self.battery_soc > self.min_soc + 0.1: # Min SOC'nin biraz üzerinde pay bırakalım
+            # Fiyatlar en yüksekken ve bataryada enerji varken, deşarj ETMİYORSAN (tembellik ediyorsan) CEZA AL!
+            if battery_power >= 0:
+                # Ceza, bataryanın ne kadar dolu olduğuyla orantılı olsun.
+                penalty_factor = (self.battery_soc - self.min_soc)
+                rewards['peak_shaving_missed_penalty'] = penalty_factor * self.reward_config.get('peak_shaving_missed_penalty_coef', -200.0)
+              
                 
         # --- 4. SOC KORUMA CEZALARI ---
         # Bu ceza, ajanın %20'de kalmasını engellemek için çok önemlidir.
