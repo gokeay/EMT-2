@@ -40,20 +40,20 @@ reward:
   #  medium: -0.5
   #  high: -1.0
   
-  unused_penalty_coef: -10.0    # Yenilenebilir israfının kW başına maliyeti. (Daha önce çok yüksekti, şimdi daha mantıklı)
-  cheap_energy_missed_penalty_coef: -50.0 # Ucuz şarjı kaçırma cezası.
+  unused_penalty_coef: -20.0    # Yenilenebilir israfının kW başına maliyeti. (Daha önce çok yüksekti, şimdi daha mantıklı)
+  cheap_energy_missed_penalty_coef: -100.0 # Ucuz şarjı kaçırma cezası.
   
-  battery_degradation_penalty: -0.1 # Bataryayı her kullanmanın kW başına küçük maliyeti.
+  ### battery_degradation_penalty: -0.1 # Bataryayı her kullanmanın kW başına küçük maliyeti.
   critical_grid_penalty: -100.0     # Bedava enerji varken şebeke kullanmanın AĞIR cezası.
 
-  renewable_charge_reward_coef: 1.0   # Fazla yenilenebilir ile şarj etmenin kW başına ödülü.
-  cheap_charge_reward_coef: 2.0       # Ucuzken şarj etmenin kW başına ödülü (daha değerli).
+  renewable_charge_reward_coef: 15.0   # Fazla yenilenebilir ile şarj etmenin kW başına ödülü.
+  cheap_charge_reward_coef: 30.0       # Ucuzken şarj etmenin kW başına ödülü (daha değerli).
 
 
 # 🤖 Training Parameters
 training:
   # Model parameters
-  learning_rate: 0.01
+  learning_rate: 0.0003
   batch_size: 128
   gamma: 0.99
   
